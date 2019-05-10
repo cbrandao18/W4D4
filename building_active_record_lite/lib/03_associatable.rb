@@ -10,23 +10,41 @@ class AssocOptions
   )
 
   def model_class
-    # ...
+    #https://apidock.com/rails/String/constantize
+    @class_name.constantize
   end
 
   def table_name
-    # ...
+    model_class.table_name
   end
 end
 
 class BelongsToOptions < AssocOptions
-  def initialize(name, options = {})
-    # ...
+  def initialize(name, options = {}) 
+    defaults = {
+      :foreign_key => "#{name}_id".to_sym,
+      :class_name => "#{name}".camelcase,
+      :primary_key => :id
+    }
+
+    defaults.keys.each do |key|
+      self.send("#{key}=", options[key] || defaults[key])
+    end
+    
   end
 end
 
 class HasManyOptions < AssocOptions
   def initialize(name, self_class_name, options = {})
-    # ...
+    defaults = {
+      :foreign_key => "#{self_class_name.underscore}_id".to_sym,
+      :class_name => name.to_s.singularize.camelcase,
+      :primary_key => :id
+    }
+
+    defaults.keys.each do |key|
+      self.send("#{key}=", options[key] || defaults[key])
+    end
   end
 end
 
@@ -34,6 +52,13 @@ module Associatable
   # Phase IIIb
   def belongs_to(name, options = {})
     # ...
+    options = BelongsToOptions.new(name, options)
+
+    define_method(name) do
+      for_key = self.send(options.foreign_key)
+      target_model_class = self.model_class
+      self.where(options.primary_key)
+    end
   end
 
   def has_many(name, options = {})
