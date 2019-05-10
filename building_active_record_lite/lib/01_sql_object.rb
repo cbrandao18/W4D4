@@ -61,15 +61,16 @@ class SQLObject
 
   #look up a single record by primary key
   def self.find(id)
-    thing = DBConnection.execute(<<-SQL, id)
+    parse_all(
+      DBConnection.execute(<<-SQL, id)
       SELECT
-        *
+        #{table_name}.*
       FROM
-        #{self.table_name}
+        #{table_name}
       WHERE
-        self.id = ?
+        #{table_name}.id = ?
     SQL
-    thing
+    ).first
   end
 
   def initialize(params = {})
@@ -83,7 +84,6 @@ class SQLObject
       else
         raise "unknown attribute '#{attr_name}'"
       end
-      
     end
   end
 
@@ -92,23 +92,45 @@ class SQLObject
     return @attributes
   end
 
+  #returns an array of the values for each attribute.
+  #calling Array#map on SQLObject::columns, calling send on the instance to get the value.
   def attribute_values
-    # ...
+    self.class.columns.map { |col| self.send(col) }
   end
 
   #insert a new row into the table to represent the SQLObject
   def insert
-    # ...
+    num_columns = col_names = self.class.columns[1..-1].length
+    col_names = self.class.columns[1..-1].join(", ")
+    q_marks = Array.new( num_columns, "?").join(", ")
+
+    attributes = attribute_values[1..-1]
+    DBConnection.execute(<<-SQL, *attributes)
+      INSERT INTO 
+        #{self.class.table_name} (#{col_names})
+      VALUES
+        (#{q_marks})
+    SQL
+
+    self.id = DBConnection.last_insert_row_id
   end
 
   #update the row with the id of this SQLObject
   def update
-    # ...
+    set_line = self.class.columns.map { |name| name.to_s + " = ?" }.join(", ")
+    DBConnection.execute(<<-SQL, *attribute_values, self.id)
+      UPDATE
+        #{self.class.table_name}
+      SET
+        #{set_line}
+      WHERE
+        #{self.class.table_name}.id = ?
+    SQL
   end
 
  #convenience method that either calls insert/update depending on whether or not the SQLObject already exists in the table.
   def save
-    # ...
+    id.nil? ? insert : update
   end
 
 end
